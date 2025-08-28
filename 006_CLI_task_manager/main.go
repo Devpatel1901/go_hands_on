@@ -42,8 +42,23 @@ var listCmd = &cobra.Command{
 	Run:   listTasks,
 }
 
+var rmCmd = &cobra.Command{
+	Use:   "rm [taskNumber]",
+	Short: "Delete a task",
+	Long:  "Delete a task from your TODO list",
+	Args:  cobra.ExactArgs(1),
+	Run:   deleteTask,
+}
+
+var completeCmd = &cobra.Command{
+	Use:   "complete",
+	Short: "List all of your completed task",
+	Long:  "List all of your completed tasks",
+	Run:   completeTasks,
+}
+
 func init() {
-	rootCmd.AddCommand(addCmd, doCmd, listCmd)
+	rootCmd.AddCommand(addCmd, doCmd, listCmd, rmCmd, completeCmd)
 }
 
 func openDatabase() *bolt.DB {
@@ -134,6 +149,65 @@ func listTasks(cmd *cobra.Command, args []string) {
 			if string(v) == "0" {
 				fmt.Printf("%d. %s\n", cnt, k)
 				cnt++
+			}
+		}
+
+		return nil
+	})
+}
+
+func deleteTask(cmd *cobra.Command, args []string) {
+	id, _ := strconv.Atoi(args[0])
+
+	db := openDatabase()
+
+	defer db.Close()
+
+	db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("MyBucket"))
+
+		if b == nil {
+			return errors.New("invalid operation!!! no tasks found in current database")
+		}
+
+		c := b.Cursor()
+
+		cnt := 0
+
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if string(v) == "0" {
+				cnt++
+			}
+
+			if cnt == id {
+				b.Delete([]byte(k))
+				fmt.Printf("You have deleted the '%s' task.", k)
+				break
+			}
+		}
+
+		return nil
+	})
+}
+
+func completeTasks(cmd *cobra.Command, args []string) {
+	db := openDatabase()
+
+	defer db.Close()
+
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("MyBucket"))
+
+		if b == nil {
+			return errors.New("invalid operation!!! no tasks found in current database")
+		}
+
+		c := b.Cursor()
+
+		fmt.Println("You have finished the following tasks today:")
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if string(v) == "1" {
+				fmt.Printf("- %s\n", k)
 			}
 		}
 
